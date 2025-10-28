@@ -6,6 +6,8 @@ from gymnasium import spaces
 import numpy as np
 from helpers import manhattan, A_LEFT, A_RIGHT, A_FORWARD
 import sys
+import time
+
 
 # (1) Restrict actions
 class ActionRestrictWrapper(gym.ActionWrapper):
@@ -162,6 +164,7 @@ class DynamicLavaWrapper(gym.Wrapper):
 
         # Ensure phase 0 grid is the base grid
         self._apply_phase(phase=0)
+        # Track the phase for optimization
         self.current_phase = 0
         return obs, info
 
@@ -188,8 +191,7 @@ class DynamicLavaWrapper(gym.Wrapper):
                 # FORCE RENDER THE DEATH STATE
                 if hasattr(self.env.unwrapped, 'render'):
                     self.env.unwrapped.render()
-                    import time
-                    time.sleep(0.5)  # Pause so you can see it
+                    time.sleep(0.5)  # Pause so we can see it
                 
                 return obs, -1.0, True, False, {"lava_death": True}
         
@@ -216,10 +218,6 @@ class DynamicLavaWrapper(gym.Wrapper):
         
         # Clear all current lava
         for (x, y) in current_lava:
-            # Check if it's a wall or goal - don't remove those
-            cell = grid.get(x, y)
-            if cell is not None and cell.type in ["wall", "goal"]:
-                continue
             grid.set(x, y, Floor())
         
         # Then set shifted positions to lava (shift base lava by phase)
@@ -240,8 +238,7 @@ def make_floor_is_lava_env(render_mode="human",
                            phi_scale=0.02,
                            step_penalty=-0.01,
                            seed=0,
-                           # NEW: dynamics options
-                           dynamic=False,
+                           dynamic=True,
                            phase_in_obs=True):
     env = gym.make("MiniGrid-LavaCrossingS9N1-v0",
                    render_mode=render_mode,
