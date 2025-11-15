@@ -1,13 +1,11 @@
 import gymnasium as gym
-import minigrid
+from gymnasium import spaces
 from minigrid.core.constants import OBJECT_TO_IDX
 from minigrid.core.world_object import Lava, Floor
-from gymnasium import spaces
 import numpy as np
 from helpers import manhattan, A_LEFT, A_RIGHT, A_FORWARD
-import sys
 import time
-
+import minigrid
 
 # (1) Restrict actions
 class ActionRestrictWrapper(gym.ActionWrapper):
@@ -19,12 +17,11 @@ class ActionRestrictWrapper(gym.ActionWrapper):
     def action(self, act):
         return self._allowed[int(act)]
 
-
 # (2) Convert full obs to multi-channel tensor (with phase support)
 class GridChannelsWrapper(gym.ObservationWrapper):
     def __init__(self, env, phase_in_obs: bool = False, period=None, shift_interval=10):
         super().__init__(env)
-        self.H, self.W = env.unwrapped.width, env.unwrapped.height
+        self.H, self.W = env.unwrapped.height, env.unwrapped.width
         self.phase_in_obs = phase_in_obs
         self.shift_interval = shift_interval  # same shift as DynamicLavaWrapper
         # Use grid width as period by default
@@ -64,7 +61,6 @@ class GridChannelsWrapper(gym.ObservationWrapper):
 
         stacked = np.stack([empty, wall, lava, goal, agent, phase_chan], axis=0)
         return stacked
-
 
 # (3) Reward shaping (potential-based)
 class RewardShapingWrapper(gym.Wrapper):
@@ -119,7 +115,6 @@ class RewardShapingWrapper(gym.Wrapper):
 
         return obs, shaped, terminated, truncated, info
 
-
 # (4) Dynamic lava (periodic, Markov if phase is in observation)
 class DynamicLavaWrapper(gym.Wrapper):
     """
@@ -136,8 +131,8 @@ class DynamicLavaWrapper(gym.Wrapper):
         self.shift_interval = shift_interval  # Lava shifts every N steps
 
         self._base_lava = None  # set of (x,y) that are lava in the base map
-        self._W = None
         self._H = None
+        self._W = None
         self.current_phase = None  
 
     def reset(self, **kwargs):
@@ -146,7 +141,7 @@ class DynamicLavaWrapper(gym.Wrapper):
             return obs, info
 
         grid = self.env.unwrapped.grid
-        self._W, self._H = self.env.unwrapped.width, self.env.unwrapped.height
+        self._H, self._W = self.env.unwrapped.height, self.env.unwrapped.width
         
         # Set period to interior width (excluding walls)
         if self.K is None:
@@ -181,7 +176,7 @@ class DynamicLavaWrapper(gym.Wrapper):
                 self.current_phase = next_phase
             
             # Check if lava appeared under the agent after phase shift
-            ax, ay = self.env.unwrapped.agent_pos
+            ax, ay = self.env.unwrapped.agent_pos 
             cell_under = self.env.unwrapped.grid.get(ax, ay)
             if cell_under is not None and cell_under.type == "lava":
                 # Agent dies if lava appears under them
@@ -202,7 +197,7 @@ class DynamicLavaWrapper(gym.Wrapper):
 
     def _apply_phase(self, phase: int):
         grid = self.env.unwrapped.grid
-        W, H = self._W, self._H
+        H, W = self._H, self._W
         base = self._base_lava
         
         if base is None:
@@ -230,34 +225,31 @@ class DynamicLavaWrapper(gym.Wrapper):
             if cell is None or cell.type != "goal":
                 grid.set(xs, y, Lava())
 
-
-# (5) Env builder
-def make_floor_is_lava_env(render_mode="human",
+def make_floor_is_lava_env(render_mode=None,
                            max_steps=200,
-                           use_shaping=True,
-                           phi_scale=0.02,
-                           step_penalty=-0.01,
-                           seed=0,
+                           seed=None,
                            dynamic=True,
+                           use_shaping=True,
+                           step_penalty=-0.01,
+                           phi_scale=0.02,
                            phase_in_obs=True):
     env = gym.make("MiniGrid-LavaCrossingS9N1-v0",
                    render_mode=render_mode,
                    max_steps=max_steps)
-    env.reset(seed=seed)
+    
+    if seed is not None:
+        env.reset(seed=seed)
+
     env = minigrid.wrappers.FullyObsWrapper(env)
 
-    # Get grid width for period (use interior width to avoid walls)
+    # interior width for phase period
     W = env.unwrapped.width
-    interior_width = W - 2  # Exclude wall columns
+    interior_width = W - 2
 
-    # Dynamic lava with shift mode (before shaping/obs so they see the updated grid)
-    # shift_interval=10 means lava shifts position every 10 steps
-    # period=interior_width means it takes interior_width shifts to complete a full cycle
     env = DynamicLavaWrapper(env,
                              enabled=bool(dynamic),
                              period=interior_width,
                              shift_interval=10)
-
     env = ActionRestrictWrapper(env)
     env = RewardShapingWrapper(env,
                                use_shaping=use_shaping,
@@ -268,39 +260,3 @@ def make_floor_is_lava_env(render_mode="human",
                               period=interior_width,
                               shift_interval=10)
     return env
-
-
-# (6) Test both static and dynamic environments
-if __name__ == "__main__":
-    
-    mode = "dynamic"
-    
-    if mode == "dynamic":
-        print("=" * 50)
-        print("Testing DYNAMIC environment (lava shifts)")
-        print("=" * 50)
-        env = make_floor_is_lava_env(render_mode="human",
-                                     use_shaping=True,
-                                     max_steps=200,
-                                     seed=40,
-                                     dynamic=True,
-                                     phase_in_obs=True)
-    else:
-        print("=" * 50)
-        print("Testing STATIC environment (no lava movement)")
-        print("=" * 50)
-        env = make_floor_is_lava_env(render_mode="human",
-                                     use_shaping=True,
-                                     max_steps=200,
-                                     seed=40,
-                                     dynamic=False,
-                                     phase_in_obs=False)
-
-    obs, info = env.reset()
-    done = False
-    while not done:
-        a = env.action_space.sample()
-        obs, rew, terminated, truncated, info = env.step(a)
-        done = terminated or truncated
-        print(f"step={env.unwrapped.step_count:03d} reward={rew:.3f}")
-    env.close()
