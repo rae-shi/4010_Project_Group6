@@ -27,4 +27,22 @@ pip install -r requirements.txt
 ```
 
 ## Getting Started
-run main.py
+
+Run the program from your terminal using the `python run.py` command, followed by the desired arguments.
+
+### Available Arguments
+
+| Argument  | Type | Default  | Description                                                |
+|-----------|------|----------|------------------------------------------------------------|
+| `--algo`  | str  | Required | Algorithm to run (`tabq`, `dqn`, or `random`).             |
+| `--dynamic` | flag | `False` | Enable dynamic lava; omit for static lava.                 |
+| `--sparse` | flag | `False` | Use sparse rewards (disables reward shaping).              |
+| `--episodes` | int | `5`      | Number of training episodes.                               |
+| `--seed`  | int  | `20`     | Random seed for reproducibility.                           |
+
+#### Example
+
+```bash
+python run.py --algo tabq --dynamic
+```
+
