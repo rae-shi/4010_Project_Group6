@@ -5,7 +5,7 @@ from minigrid.core.world_object import Lava, Floor
 import numpy as np
 from helpers import manhattan, A_LEFT, A_RIGHT, A_FORWARD
 import time
-import minigrid
+from minigrid.wrappers import FullyObsWrapper 
 
 # (1) Restrict actions
 class ActionRestrictWrapper(gym.ActionWrapper):
@@ -181,7 +181,13 @@ class DynamicLavaWrapper(gym.Wrapper):
             if cell_under is not None and cell_under.type == "lava":
                 # Agent dies if lava appears under them
                 # Get observation first, then force termination
-                obs = self.env.unwrapped.gen_obs()
+
+                # Get the raw local observation (7x7) directly from the base environment
+                # Then pass it through FullyObsWrapper to convert it into a full 9x9 global observation.
+                # This ensures consistency — without this step, GridChannelsWrapper might receive a smaller
+                # (7x7) obs and cause index errors.
+                raw = self.env.unwrapped.gen_obs()
+                obs = self.env.observation(raw)
             
                 # FORCE RENDER THE DEATH STATE
                 if hasattr(self.env.unwrapped, 'render'):
@@ -240,7 +246,7 @@ def make_floor_is_lava_env(render_mode=None,
     if seed is not None:
         env.reset(seed=seed)
 
-    env = minigrid.wrappers.FullyObsWrapper(env)
+    env = FullyObsWrapper(env)
 
     # interior width for phase period
     W = env.unwrapped.width

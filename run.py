@@ -4,8 +4,9 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from env import make_floor_is_lava_env
-# from agents.tabq import TabQ
 from agents.dqn import DQN, ReplayBuffer
+from agents.tabq import TabQ
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--algo", choices=["tabq", "dqn", "random"], required=True)
@@ -23,7 +24,27 @@ env = make_floor_is_lava_env(
 )
 
 if args.algo == "tabq":
-    pass
+    def state_id_fn(obs):
+        C, H, W = obs.shape
+        agent_layer = obs[4]  # if channel 4 is agent
+        y, x = np.argwhere(agent_layer == 1.0)[0]
+        return y * W + x
+
+    n_states = env.unwrapped.width * env.unwrapped.height
+
+    Pi, Q = TabQ(
+        env=env,
+        gamma=0.99,
+        step_size=0.5,
+        epsilon=0.1,
+        max_episodes=args.episodes,
+        n_states=n_states,
+        state_id_fn=state_id_fn,
+        seed=args.seed
+    )
+
+    print("Training complete.")
+    print("Sample policy (first 20 states):", Pi[:20])
 
 elif str.lower(args.algo) == "dqn":
     device = torch.device("cpu")
@@ -113,7 +134,6 @@ elif str.lower(args.algo) == "dqn":
         print(f"Episode {ep+1}: Total reward = {total_reward:.3f}")
 
     env.close()
-
 
 elif args.algo == "random":
     for ep in range(5):
