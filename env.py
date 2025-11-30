@@ -3,7 +3,7 @@ from gymnasium import spaces
 from minigrid.core.constants import OBJECT_TO_IDX
 from minigrid.core.world_object import Lava, Floor
 import numpy as np
-from helpers import manhattan, A_LEFT, A_RIGHT, A_FORWARD
+from helpers import manhattan, A_LEFT, A_RIGHT, A_FORWARD, SHIFT_INTERVAL
 import time
 from minigrid.wrappers import FullyObsWrapper 
 
@@ -19,15 +19,15 @@ class ActionRestrictWrapper(gym.ActionWrapper):
 
 # (2) Convert full obs to multi-channel tensor (with phase support)
 class GridChannelsWrapper(gym.ObservationWrapper):
-    def __init__(self, env, phase_in_obs: bool = False, period=None, shift_interval=10):
+    def __init__(self, env, phase_in_obs: bool = False, period=None, shift_interval=SHIFT_INTERVAL):
         super().__init__(env)
         self.H, self.W = env.unwrapped.height, env.unwrapped.width
         self.phase_in_obs = phase_in_obs
         self.shift_interval = shift_interval  # same shift as DynamicLavaWrapper
         # Use grid width as period by default
         self.K = max(2, int(period if period is not None else self.W))
-        # channels: empty, wall, lava, goal, agent, time/phase
-        C = 6
+        # channels: empty, wall, lava, goal, agent, time/phase, direction
+        C = 7
         self.observation_space = spaces.Box(
             low=0.0, high=1.0, shape=(C, self.H, self.W), dtype=np.float32
         )
@@ -58,8 +58,14 @@ class GridChannelsWrapper(gym.ObservationWrapper):
             t = self.unwrapped.step_count
             T = self.unwrapped.max_steps
             phase_chan = np.full((H, W), t / max(1, T), dtype=np.float32)
+        
+        # Direction channel
+        # Normalize direction (0-3) to (0.0 - 1.0)
+        # 0=Right, 1=Down, 2=Left, 3=Up
+        dir_val = self.unwrapped.agent_dir / 3.0
+        dir_chan = np.full((self.H, self.W), dir_val, dtype=np.float32)
 
-        stacked = np.stack([empty, wall, lava, goal, agent, phase_chan], axis=0)
+        stacked = np.stack([empty, wall, lava, goal, agent, phase_chan, dir_chan], axis=0)
         return stacked
 
 # (3) Reward shaping (potential-based)
@@ -101,10 +107,16 @@ class RewardShapingWrapper(gym.Wrapper):
         if not self.use_shaping:
             return obs, r, terminated, truncated, info
 
-        # Don't shape lava death penalty - keep it clean at -1.0
+        # Don't shape lava death penalty and keep it clean at -1.0
         if info.get("lava_death", False):
             return obs, r, terminated, truncated, info
+        
+        # Handle Static Lava Death
+        # If we died (terminated=True) and didn't win (r=0), death penalty.
+        if terminated and r == 0:
+            return obs, -1.0, terminated, truncated, info
 
+        # Normal reward shaping
         shaped = r + self.step_penalty
         if self.goal_xy is not None:
             ax, ay = self.env.unwrapped.agent_pos
@@ -123,7 +135,7 @@ class DynamicLavaWrapper(gym.Wrapper):
 
     Mode: Original lava mask shifts one cell to the right each phase (wraps around)
     """
-    def __init__(self, env, enabled=True, period=None, shift_interval=10):
+    def __init__(self, env, enabled=True, period=None, shift_interval=SHIFT_INTERVAL):
         super().__init__(env)
         self.enabled = enabled
         # Will be set in reset based on grid width
@@ -232,17 +244,17 @@ class DynamicLavaWrapper(gym.Wrapper):
                 grid.set(xs, y, Lava())
 
 def make_floor_is_lava_env(render_mode=None,
-                           max_steps=200,
+                           max_steps=300,
                            seed=None,
                            dynamic=True,
                            use_shaping=True,
-                           step_penalty=-0.01,
+                           step_penalty=-0.001,
                            phi_scale=0.02,
                            phase_in_obs=True):
     env = gym.make("MiniGrid-LavaCrossingS9N1-v0",
                    render_mode=render_mode,
                    max_steps=max_steps)
-    
+
     if seed is not None:
         env.reset(seed=seed)
 
@@ -255,7 +267,7 @@ def make_floor_is_lava_env(render_mode=None,
     env = DynamicLavaWrapper(env,
                              enabled=bool(dynamic),
                              period=interior_width,
-                             shift_interval=10)
+                             shift_interval=SHIFT_INTERVAL)
     env = ActionRestrictWrapper(env)
     env = RewardShapingWrapper(env,
                                use_shaping=use_shaping,
@@ -264,5 +276,5 @@ def make_floor_is_lava_env(render_mode=None,
     env = GridChannelsWrapper(env,
                               phase_in_obs=phase_in_obs,
                               period=interior_width,
-                              shift_interval=10)
+                              shift_interval=SHIFT_INTERVAL)
     return env

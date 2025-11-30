@@ -11,5 +11,8 @@ networkx==3.3
 numpy==2.2.6
 pygame==2.6.1
 sympy==1.14.0
-torch==2.9.1+cpu
+torch==2.9.1+cpu # if error occurs, try torch==2.9.1 without the +cpu
 typing_extensions==4.15.0
+pandas==2.2.3
+seaborn==0.13.2
+matplotlib==3.10.0
