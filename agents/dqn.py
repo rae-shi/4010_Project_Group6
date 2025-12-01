@@ -28,10 +28,10 @@ class DQN(nn.Module):
         )
 
     def _get_conv_out(self, shape):
-            with torch.no_grad():
-                dummy = torch.zeros(1, *shape)
-                o = self.convolutional_layers(dummy)
-                return o.numel() // o.size(0)
+        with torch.no_grad():
+            dummy = torch.zeros(1, *shape)
+            o = self.convolutional_layers(dummy)
+            return o.numel() // o.size(0)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.convolutional_layers(x) # passes in through the convolutional layers
@@ -40,7 +40,8 @@ class DQN(nn.Module):
         return q_values
 
 class ReplayBuffer:
-    def __init__(self, max_experiences=1000):
+    # With only 1,000 steps of memory, the agent forgets what happened 5 episodes ago
+    def __init__(self, max_experiences=10000):
         self.buffer = deque(maxlen=max_experiences)
         
     def push(self, state, action, reward, next_state, done):
