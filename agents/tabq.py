@@ -60,13 +60,13 @@ def TabQ(
             total_step_counter += 1
 
         # Record metrics
-        is_success = 1 if (done and last_step_reward > 0) else 0
+        is_success = 1 if (term and last_step_reward > 0) else 0
         results.append({
             "episode": ep,
             "reward": total_reward,
             "steps": steps,
             "success": is_success,
-            "total_step_counter": total_step_counter,
+            "total_steps": total_step_counter,
             "epsilon": epsilon
         })
         

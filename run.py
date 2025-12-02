@@ -335,7 +335,7 @@ elif args.algo == "heuristic":
             "reward": total_reward,
             "steps": steps,
             "success": is_success,
-            "total_step_counter": total_step_counter
+            "total_steps": total_step_counter
         })
 
         if (ep+1) % 10 == 0:

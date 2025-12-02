@@ -86,7 +86,6 @@ ehthumbs.db
 Thumbs.db
 
 # Game/simulation output files
-*.png
 *.jpg
 *.jpeg
 *.gif
@@ -107,16 +106,6 @@ secrets.py
 # Temporary files
 *.tmp
 *.temp
-
-# Plots (keep folder, ignore images)
-plots/**
-!plots/.gitkeep
-
-# Results: keep CSVs, ignore other artifacts (e.g., PNGs)
-results/**
-!results/*.csv
-!results/.gitkeep
-!results/README.md
 
 # Checkpoints / weights / logs
 checkpoints/**

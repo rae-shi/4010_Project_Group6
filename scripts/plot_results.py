@@ -69,8 +69,14 @@ def plot_metrics(df):
     # Pre-processing
     # Calculate rolling success rate for everything first
     df["rolling_success"] = df.groupby(["Algorithm", "Environment", "Reward Type", "Seed"])["success"] \
-                              .transform(lambda x: x.rolling(window=50, min_periods=1).mean())
+                              .transform(lambda x: x.rolling(window=30, min_periods=1).mean())
 
+    df["rolling_reward"] = df.groupby(["Algorithm", "Environment", "Reward Type", "Seed"])["reward"].transform(
+    lambda x: x.rolling(window=30, min_periods=1).mean())
+
+    df["rolling_time_to_goal"] = df.groupby(["Algorithm", "Environment", "Reward Type", "Seed"])["steps"].transform(
+    lambda x: x.rolling(window=30, min_periods=1).mean()
+)                          
     df_shaped = df[df["Reward Type"] == "Shaped"].copy()
     
     if df_shaped.empty:
@@ -83,10 +89,11 @@ def plot_metrics(df):
     print("Generating Plot 1: Average Return (Shaped)...")
     plt.figure(figsize=(10, 6))
     sns.lineplot(
-        data=df_shaped, x="episode", y="reward", 
+        data=df_shaped, x="episode", y="rolling_reward", 
         hue="Algorithm", style="Environment", 
         estimator="mean", errorbar=("sd", 1)
     )
+    plt.ylabel("Average Return (Rolling 30 eps)")
     plt.title("Average Return per Episode (Shaped Reward)")
     plt.savefig(f"{OUTPUT_DIR}/1_average_return.png")
     plt.close()
@@ -98,7 +105,7 @@ def plot_metrics(df):
         data=df_shaped, x="episode", y="rolling_success", 
         hue="Algorithm", style="Environment"
     )
-    plt.ylabel("Success Rate (Rolling 50 eps)")
+    plt.ylabel("Success Rate (Rolling 30 eps)")
     plt.title("Success Rate vs Episode (Shaped Reward)")
     plt.savefig(f"{OUTPUT_DIR}/2_success_rate.png")
     plt.close()
@@ -109,16 +116,17 @@ def plot_metrics(df):
     if not success_df.empty:
         plt.figure(figsize=(10, 6))
         sns.lineplot(
-            data=success_df, x="episode", y="steps", 
+            data=success_df, x="episode", y="rolling_time_to_goal", 
             hue="Algorithm", style="Environment"
         )
-        plt.title("Time-to-Goal (Successful Episodes Only)")
+        plt.ylabel("Time-to-Goal (Rolling 30 eps)")
+        plt.title("Time-to-Goal (Successful Episodes)")
         plt.savefig(f"{OUTPUT_DIR}/3_time_to_goal.png")
         plt.close()
 
     # 4. Sample Efficiency
     print("Generating Plot 4: Sample Efficiency (Shaped)...")
-    df_shaped["step_bin"] = (df_shaped["total_steps"] // 5000) * 5000
+    df_shaped["step_bin"] = (df_shaped["total_steps"] // 1500) * 1500
     plt.figure(figsize=(10, 6))
     sns.lineplot(
         data=df_shaped, x="step_bin", y="reward", 
@@ -155,7 +163,8 @@ def plot_metrics(df):
             height=5, aspect=1.2
         )
         g.fig.suptitle("Impact of Reward Shaping: Sparse vs Shaped", y=1.02)
-        plt.savefig(f"{OUTPUT_DIR}/6_shaping_ablation.png")
+        g.fig.tight_layout(rect=[0, 0, 1, 0.95]) 
+        g.fig.savefig(f"{OUTPUT_DIR}/6_shaping_ablation.png", bbox_inches="tight")
         plt.close()
     
     print(f"\nAll plots saved to {OUTPUT_DIR}/")
