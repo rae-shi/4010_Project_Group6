@@ -6,6 +6,9 @@ import glob
 
 # Set the visual style
 sns.set_theme(style="darkgrid")
+# High font scale for readable axis labels in the report
+sns.set_context("paper", font_scale=1.4) 
+
 RESULTS_DIR = "results"
 OUTPUT_DIR = "plots"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -17,18 +20,13 @@ def load_data():
     df_list = []
     for filename in all_files:
         try:
-            # Filename format: algo_dynamic_sparse_s20.csv
             basename = os.path.basename(filename).replace(".csv", "")
             parts = basename.split("_")
-            
-            # Extract Seed
             seed = int(parts[-1].replace("s", ""))
             
-            # Extract Settings
             is_dynamic = "dynamic" in basename
             is_sparse = "sparse" in basename
             
-            # Extract Algo Name
             if "ddqn" in basename:
                 algo = "DDQN"
             elif "dqn" in basename:
@@ -40,16 +38,12 @@ def load_data():
             else:
                 raise ValueError(f"Unknown algorithm: {basename}")
 
-            # Load CSV
             df = pd.read_csv(filename)
-            
-            # Add metadata columns
             df["Algorithm"] = algo
             df["Environment"] = "Dynamic" if is_dynamic else "Static"
             df["Reward Type"] = "Sparse" if is_sparse else "Shaped"
             df["Seed"] = seed
             
-            # Calculate cumulative steps if missing
             if "total_steps" not in df.columns:
                 df["total_steps"] = df["steps"].cumsum()
                 
@@ -64,10 +58,9 @@ def load_data():
     return pd.concat(df_list, ignore_index=True)
 
 def plot_metrics(df):
-    """Generates the requested plots."""
+    """Generates plots with smaller, transparent legends."""
     
     # Pre-processing
-    # Calculate rolling success rate for everything first
     df["rolling_success"] = df.groupby(["Algorithm", "Environment", "Reward Type", "Seed"])["success"] \
                               .transform(lambda x: x.rolling(window=30, min_periods=1).mean())
 
@@ -75,43 +68,47 @@ def plot_metrics(df):
     lambda x: x.rolling(window=30, min_periods=1).mean())
 
     df["rolling_time_to_goal"] = df.groupby(["Algorithm", "Environment", "Reward Type", "Seed"])["steps"].transform(
-    lambda x: x.rolling(window=30, min_periods=1).mean()
-)                          
+    lambda x: x.rolling(window=30, min_periods=1).mean())
+                          
     df_shaped = df[df["Reward Type"] == "Shaped"].copy()
     
     if df_shaped.empty:
         print("Warning: No 'Shaped' reward data found. Using all data for main plots.")
         df_shaped = df
 
-    # Plots 1-5: Main Performance (Shaped Only)
-    
-    # 1. Average Return
-    print("Generating Plot 1: Average Return (Shaped)...")
+    # --- Plot 1: Average Return ---
+    print("Generating Plot 1: Average Return...")
     plt.figure(figsize=(10, 6))
     sns.lineplot(
         data=df_shaped, x="episode", y="rolling_reward", 
         hue="Algorithm", style="Environment", 
         estimator="mean", errorbar=("sd", 1)
     )
+    plt.xlabel("Episode")
     plt.ylabel("Average Return (Rolling 30 eps)")
-    plt.title("Average Return per Episode (Shaped Reward)")
-    plt.savefig(f"{OUTPUT_DIR}/1_average_return.png")
+    # framealpha=0.5 makes it 50% transparent
+    plt.legend(loc='best', framealpha=0.2, fontsize=12) 
+    plt.tight_layout()
+    plt.savefig(f"{OUTPUT_DIR}/1_average_return.png", bbox_inches="tight")
     plt.close()
 
-    # 2. Success Rate
-    print("Generating Plot 2: Success Rate (Shaped)...")
+    # --- Plot 2: Success Rate ---
+    print("Generating Plot 2: Success Rate...")
     plt.figure(figsize=(10, 6))
     sns.lineplot(
         data=df_shaped, x="episode", y="rolling_success", 
         hue="Algorithm", style="Environment"
     )
+    plt.xlabel("Episode")
     plt.ylabel("Success Rate (Rolling 30 eps)")
-    plt.title("Success Rate vs Episode (Shaped Reward)")
-    plt.savefig(f"{OUTPUT_DIR}/2_success_rate.png")
+    # framealpha=0.2 makes it 20% transparent
+    plt.legend(loc='best', framealpha=0.2, fontsize=12)
+    plt.tight_layout()
+    plt.savefig(f"{OUTPUT_DIR}/2_success_rate.png", bbox_inches="tight")
     plt.close()
 
-    # 3. Time-to-Goal
-    print("Generating Plot 3: Time-to-Goal (Shaped)...")
+    # --- Plot 3: Time-to-Goal ---
+    print("Generating Plot 3: Time-to-Goal...")
     success_df = df_shaped[df_shaped["success"] == 1]
     if not success_df.empty:
         plt.figure(figsize=(10, 6))
@@ -119,51 +116,69 @@ def plot_metrics(df):
             data=success_df, x="episode", y="rolling_time_to_goal", 
             hue="Algorithm", style="Environment"
         )
+        plt.xlabel("Episode")
         plt.ylabel("Time-to-Goal (Rolling 30 eps)")
-        plt.title("Time-to-Goal (Successful Episodes)")
-        plt.savefig(f"{OUTPUT_DIR}/3_time_to_goal.png")
+        # framealpha=0.5 makes it 50% transparent
+        plt.legend(loc='best', framealpha=0.5, fontsize=12)
+        plt.tight_layout()
+        plt.savefig(f"{OUTPUT_DIR}/3_time_to_goal.png", bbox_inches="tight")
         plt.close()
 
-    # 4. Sample Efficiency
-    print("Generating Plot 4: Sample Efficiency (Shaped)...")
+    # --- Plot 4: Sample Efficiency ---
+    print("Generating Plot 4: Sample Efficiency...")
     df_shaped["step_bin"] = (df_shaped["total_steps"] // 1500) * 1500
     plt.figure(figsize=(10, 6))
+    
     sns.lineplot(
         data=df_shaped, x="step_bin", y="reward", 
         hue="Algorithm", style="Environment"
     )
-    plt.title("Sample Efficiency (Shaped Reward)")
-    plt.savefig(f"{OUTPUT_DIR}/4_sample_efficiency.png")
+    plt.xlabel("Total Environment Steps")
+    plt.ylabel("Average Return") 
+    # framealpha=0.2 makes it 20% transparent
+    plt.legend(loc='best', framealpha=0.2, fontsize=12)
+    plt.tight_layout()
+    plt.savefig(f"{OUTPUT_DIR}/4_sample_efficiency.png", bbox_inches="tight")
     plt.close()
 
-    # 5. Static vs Dynamic Bar Chart
-    print("Generating Plot 5: Static vs Dynamic (Shaped)...")
+    # --- Plot 5: Static vs Dynamic Bar Chart ---
+    print("Generating Plot 5: Static vs Dynamic...")
     plt.figure(figsize=(10, 6))
     sns.barplot(
         data=df_shaped, x="Algorithm", y="success", 
         hue="Environment"
     )
-    plt.title("Overall Success Rate: Static vs Dynamic")
-    plt.savefig(f"{OUTPUT_DIR}/5_static_vs_dynamic.png")
+    plt.xlabel("Algorithm")
+    plt.ylabel("Success Rate (Mean)")
+    # framealpha=0.2 makes it 20% transparent
+    plt.legend(loc='best', framealpha=0.5, fontsize=14)
+    plt.tight_layout()
+    plt.savefig(f"{OUTPUT_DIR}/5_static_vs_dynamic.png", bbox_inches="tight")
     plt.close()
 
-    # Plot 6: ABLATION STUDY (Sparse vs Shaped)
-    print("Generating Plot 6: Reward Shaping Comparison...")
+    # --- Plot 6: Ablation Study (Stacked) ---
+    print("Generating Plot 6: Ablation...")
     
-    # Filter for only RL agents (Heuristic doesn't learn, so shaping doesn't matter)
     df_rl = df[df["Algorithm"].isin(["TabQ", "DQN", "DDQN"])]
     
     if not df_rl.empty:
-        # Create a FacetGrid: Columns = Environment, Hue = Reward Type
         g = sns.relplot(
             data=df_rl, 
             x="episode", y="rolling_success", 
             hue="Reward Type", style="Algorithm",
-            col="Environment", kind="line",
-            height=5, aspect=1.2
+            row="Environment", kind="line", 
+            height=3.5, aspect=2.5
         )
-        g.fig.suptitle("Impact of Reward Shaping: Sparse vs Shaped", y=1.02)
-        g.fig.tight_layout(rect=[0, 0, 1, 0.95]) 
+        
+        g.set_axis_labels("Episode", "Success Rate (Rolling 30 eps)")
+        
+        # Legend is outside (top), so we keep frameon=False (no box needed)
+        sns.move_legend(
+            g, "lower center",
+            bbox_to_anchor=(0.5, 1), ncol=4, title=None, frameon=False
+        )
+        
+        g.fig.tight_layout() 
         g.fig.savefig(f"{OUTPUT_DIR}/6_shaping_ablation.png", bbox_inches="tight")
         plt.close()
     
